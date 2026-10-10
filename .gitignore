@@ -2,7 +2,6 @@ dogs/
 docs/
 vpn-profiles/
 user-configs/
-compose.yml
 .env
 .superpowers/
 AGENTS.md
