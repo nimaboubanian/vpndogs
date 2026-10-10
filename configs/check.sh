@@ -37,7 +37,7 @@ wait_containers() {
 wait_containers
 sleep 5
 
-host_ip=$(curl -s --max-time 20 https://api.ipify.org)
+host_ip=$(curl -s --noproxy '*' --max-time 20 https://api.ipify.org)
 [ -n "$host_ip" ] || fail "direct egress (host): no IP"
 
 proxy_ip=$(curl -s --max-time 20 $SOCKS $PROXY https://api.ipify.org)
