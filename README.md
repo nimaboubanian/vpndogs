@@ -42,6 +42,15 @@ one of three exits:
 When the sb-cluster dies, the selector automatically fails over to the
 SoftEther fallback and returns to the cluster when it recovers.
 
+An optional inbound node accepts connections *from* remote clients and feeds
+them into that same chain:
+
+```
+phone ──UDP 500/4500/1061──► vpndogs-ipsec-inbound   (strongswan-server)  profile ipsec-inbound
+                                 charon + kernel XFRM decrypt
+                                 policy route ──► tun0 ──socks──► vpndogs-router :1070
+```
+
 ## Prerequisites
 
 - Docker Engine with **compose v2.20+** (long-syntax `depends_on` with
@@ -57,6 +66,8 @@ SoftEther fallback and returns to the cluster when it recovers.
 | `COMPOSE_PROFILES` | Which extra clients to run, e.g. `sb-client-2,sb-client-4`. |
 | `VPN_PROFILE` | SoftEther profile name (without the `.vpn` extension) in `vpn-profiles/` — e.g. `DEFAULT-main`. |
 | `SE_HOST`, `SE_PORT`, `SE_HUB`, `SE_USER`, `SE_PASSWORD` | SoftEther connection as env vars — alternative to a `.vpn` profile file. Most users leave these empty. |
+| `IPSEC_USERS`, `IPSEC_PSK`, `VPN_SERVER_ADDR` | **Required for the inbound IPsec node only** (profile `ipsec-inbound`). EAP credentials, the IKEv1 shared secret, and the address clients dial. |
+| `VPN_POOL`, `CLIENT_DNS` | Address pool and DNS pushed to inbound IPsec clients. |
 
 > Run an extra client (`COMPOSE_PROFILES=sb-client-2` etc.) *without* a
 > matching `SUB_URL_n` and that container will fail its subscription fetch and
@@ -81,6 +92,43 @@ cp /path/to/your-profile.vpn vpn-profiles/       # then in .env:
 VPN_PROFILE=your-profile                         # (name without the .vpn extension)
 docker compose up -d vpndogs-softether
 ```
+
+## Inbound IPsec node (optional)
+
+Remote clients can dial into the stack instead of the host using a SOCKS proxy
+it already runs. Add `ipsec-inbound` to `COMPOSE_PROFILES`, set `IPSEC_USERS`,
+`IPSEC_PSK` and `VPN_SERVER_ADDR` in `.env`, and bring it up:
+
+```sh
+docker compose up -d vpndogs-ipsec-inbound
+```
+
+It publishes UDP **500** and **4500** (what native IKEv2 clients and legacy
+IKEv1 routers require — open both on the firewall, plus **1061**/udp if
+strongSwan-based clients will use it) and needs `NET_ADMIN` + `/dev/net/tun`.
+
+Connecting a client:
+
+- **Native IKEv2** (Windows/iOS/macOS/Android) — server `VPN_SERVER_ADDR`, type
+  IKEv2 EAP with username/password from `IPSEC_USERS`. First copy the CA:
+  `docker cp vpndogs-ipsec-inbound:/etc/swanctl/x509ca/ca-cert.pem ./ca.pem`,
+  then import it into the client.
+- **strongSwan-based clients** — same credentials on port **1061**.
+- **Legacy IKEv1 routers** — shared secret `IPSEC_PSK` on port **500**, main
+  mode.
+
+Decrypted traffic enters the same chain as everything else, so inbound clients
+get domestic-direct / sb-cluster / blackhole exactly like the local SOCKS
+clients.
+
+**Firewall or ports already taken?** IKE needs UDP 500 and 4500 on the host. If
+the host runs its own IPsec/L2TP daemon, publishing fails. Only strongSwan-based
+clients can use a custom port, so redirecting 500/4500 loses native and legacy
+clients.
+
+**Enabled without credentials?** The container logs `FATAL: IPSEC_USERS is
+required` (or `IPSEC_PSK` / `VPN_SERVER_ADDR`) and restart-loops; the rest of
+the stack is unaffected.
 
 ## `user-configs/`
 
