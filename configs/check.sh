@@ -64,28 +64,33 @@ if [ $FAILOVER = 1 ]; then
     names=$(docker ps --filter 'name=^vpndogs-sb-client-' --format '{{.Names}}')
     [ -n "$names" ] || fail "failover: no running sb-clients to stop"
     docker stop $names > /dev/null
+    trap 'docker start $names > /dev/null 2>&1 || true' EXIT INT TERM
     sleep 15
 
-    failover_ip=$(curl -s --max-time 20 $SOCKS $PROXY https://api.ipify.org)
-    if [ -n "$failover_ip" ] && [ "$failover_ip" != "$host_ip" ]; then
+    # ponytail: if-condition, not a bare assignment — under `set -e` a curl error
+    # would abort before `docker start`, leaving the sb-clients stopped.
+    if failover_ip=$(curl -s --max-time 20 $SOCKS $PROXY https://api.ipify.org) \
+        && [ -n "$failover_ip" ] && [ "$failover_ip" != "$host_ip" ]; then
         pass "failover (egress: $failover_ip)"
     else
         docker start $names > /dev/null
-        fail "failover: no egress via softether after clients stopped ($failover_ip)"
+        fail "failover: no egress via softether after clients stopped (${failover_ip:-curl failed})"
     fi
 
     docker start $names > /dev/null
     budget=120
     restored_ip=""
+    restored=0
     while [ $budget -gt 0 ]; do
         if restored_ip=$(curl -s --max-time 20 $SOCKS $PROXY https://api.ipify.org) && [ -n "$restored_ip" ] && [ "$restored_ip" != "$host_ip" ]; then
             pass "restore (egress: $restored_ip)"
+            restored=1
             break
         fi
         sleep 5
         budget=$((budget - 5))
     done
-    [ -n "$restored_ip" ] || fail "restore: no sb-cluster egress after clients restarted"
+    [ "$restored" = 1 ] || fail "restore: no sb-cluster egress after clients restarted"
 fi
 
 echo "all checks passed" >&2
