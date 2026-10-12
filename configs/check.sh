@@ -27,27 +27,39 @@ wait_containers() {
         done
         se=$(docker inspect --format '{{.State.Status}}' vpndogs-softether 2>/dev/null || echo missing)
         [ "$se" = running ] || ok=0
+        if [ $FAILOVER = 1 ]; then
+            # failover is only meaningful with a configured fallback. An
+            # unconfigured softether crash-loops (entrypoint exits), and
+            # `running` reads true in the gap between restarts.
+            seh=$(docker inspect --format '{{.State.Health.Status}}' vpndogs-softether 2>/dev/null || echo missing)
+            [ "$seh" = healthy ] || ok=0
+        fi
         [ $ok = 1 ] && return 0
         sleep 2
         budget=$((budget - 2))
     done
+    if [ $FAILOVER = 1 ]; then
+        fail "failover needs vpndogs-softether healthy: set VPN_PROFILE (with a *.vpn file in vpn-profiles/) or SE_HOST/SE_PORT/SE_HUB/SE_USER/SE_PASSWORD - see 'docker compose logs vpndogs-softether'"
+    fi
     fail "stack containers not healthy within 120s"
 }
 
 wait_containers
 sleep 5
 
-host_ip=$(curl -s --noproxy '*' --max-time 20 https://api.ipify.org)
-[ -n "$host_ip" ] || fail "direct egress (host): no IP"
+# any curl failure here must report, never abort silently under `set -e`
+if ! host_ip=$(curl -s --noproxy '*' --max-time 20 https://api.ipify.org) || [ -z "$host_ip" ]; then
+    fail "direct egress (host): no IP from the baseline endpoint - internet or DNS is down, retry"
+fi
 
-proxy_ip=$(curl -s --max-time 20 $SOCKS $PROXY https://api.ipify.org)
+proxy_ip=$(curl -s --retry 2 --retry-all-errors --max-time 20 $SOCKS $PROXY https://api.ipify.org || true)
 if [ -n "$proxy_ip" ] && [ "$proxy_ip" != "$host_ip" ]; then
     pass "remote egress (proxy: $proxy_ip, host: $host_ip)"
 else
     fail "remote egress: proxy IP empty or equals host IP ($proxy_ip)"
 fi
 
-code=$(curl -s -o /dev/null -w '%{http_code}' --max-time 20 $SOCKS $PROXY https://www.aparat.com)
+code=$(curl -s --retry 2 --retry-all-errors -o /dev/null -w '%{http_code}' --max-time 20 $SOCKS $PROXY https://www.aparat.com || true)
 if [ "${code:-0}" -ge 200 ] && [ "$code" -lt 400 ]; then
     pass "domestic egress (aparat.com -> HTTP $code)"
 else
@@ -69,7 +81,7 @@ if [ $FAILOVER = 1 ]; then
 
     # ponytail: if-condition, not a bare assignment — under `set -e` a curl error
     # would abort before `docker start`, leaving the sb-clients stopped.
-    if failover_ip=$(curl -s --max-time 20 $SOCKS $PROXY https://api.ipify.org) \
+    if failover_ip=$(curl -s --retry 2 --retry-all-errors --max-time 20 $SOCKS $PROXY https://api.ipify.org) \
         && [ -n "$failover_ip" ] && [ "$failover_ip" != "$host_ip" ]; then
         pass "failover (egress: $failover_ip)"
     else
@@ -82,7 +94,7 @@ if [ $FAILOVER = 1 ]; then
     restored_ip=""
     restored=0
     while [ $budget -gt 0 ]; do
-        if restored_ip=$(curl -s --max-time 20 $SOCKS $PROXY https://api.ipify.org) && [ -n "$restored_ip" ] && [ "$restored_ip" != "$host_ip" ]; then
+        if restored_ip=$(curl -s --retry 2 --retry-all-errors --max-time 20 $SOCKS $PROXY https://api.ipify.org) && [ -n "$restored_ip" ] && [ "$restored_ip" != "$host_ip" ]; then
             pass "restore (egress: $restored_ip)"
             restored=1
             break

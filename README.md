@@ -67,9 +67,20 @@ SoftEther fallback and returns to the cluster when it recovers.
 The gitignored `vpn-profiles/` directory holds SoftEther `*.vpn` profile files
 (exported from the SoftEther Manager panel) for the fallback client: they look
 like `dogs/softether-client-docker/vpn-profiles/DEFAULT-main.vpn`. The
-directory is invisible to git — create it if absent. Without a profile or
-`SE_*` vars, softether runs but can't connect; that's acceptable, it only
-serves as the backup egress.
+directory is invisible to git — create it if absent.
+
+**The fallback must be configured or it restart-loops.** With neither a
+profile nor `SE_*` vars, the image's entrypoint exits (`SE_HUB is required for
+environment-based VPN setup`) and docker restarts it forever. Routing through
+the sb-cluster is unaffected — but there is no failover until you configure it,
+and `configs/check.sh --failover` will say so explicitly:
+
+```sh
+mkdir -p vpn-profiles
+cp /path/to/your-profile.vpn vpn-profiles/       # then in .env:
+VPN_PROFILE=your-profile                         # (name without the .vpn extension)
+docker compose up -d vpndogs-softether
+```
 
 ## `user-configs/`
 
