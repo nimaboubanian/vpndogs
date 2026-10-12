@@ -54,10 +54,10 @@ else
     fail "domestic egress: HTTP $code"
 fi
 
-if curl -s -o /dev/null --max-time 10 $SOCKS $PROXY http://doubleclick.net; then
-    fail "blackhole: doubleclick.net was reachable"
+if curl -s -o /dev/null --max-time 10 $SOCKS $PROXY http://googlesyndication.com; then
+    fail "blackhole: googlesyndication.com was reachable"
 else
-    pass "blackhole (doubleclick.net unreachable)"
+    pass "blackhole (googlesyndication.com unreachable)"
 fi
 
 if [ $FAILOVER = 1 ]; then
