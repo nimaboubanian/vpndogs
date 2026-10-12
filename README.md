@@ -126,6 +126,14 @@ the host runs its own IPsec/L2TP daemon, publishing fails. Only strongSwan-based
 clients can use a custom port, so redirecting 500/4500 loses native and legacy
 clients.
 
+**Connected, but the tunnel carries no traffic?** The host kernel needs
+`ip_compat` (ESP-in-UDP), `af_alg` and `crypto_user` (ChaCha20/AES-GCM ESP) —
+the container shares the host kernel, so they are not part of the image:
+`lsmod | grep -E '^(ip_compat|af_alg|crypto_user|xfrm_user)'`, and
+`sudo modprobe ip_compat af_alg crypto_user xfrm_user` if anything is missing.
+Without them the SA negotiates and passes nothing, which looks like a routing
+fault rather than a missing module.
+
 **Enabled without credentials?** The container logs `FATAL: IPSEC_USERS is
 required` (or `IPSEC_PSK` / `VPN_SERVER_ADDR`) and restart-loops; the rest of
 the stack is unaffected.
