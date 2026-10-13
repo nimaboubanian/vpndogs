@@ -213,10 +213,51 @@ services:
     networks: [vpndogs]
     restart: unless-stopped
 
+  vpndogs-wg-inbound:
+    image: nimaboubanian/wireguard-server
+    container_name: vpndogs-wg-inbound
+    profiles: ["wg-inbound"]
+    ports:
+      - "1062:1062/udp"
+    cap_add:
+      - NET_ADMIN
+    devices:
+      - /dev/net/tun
+    sysctls:
+      # forwarding is required: WireGuard decapsulates into the container netns
+      # and the policy route hands the packet to tun0
+      net.ipv4.ip_forward: "1"
+      # rp_filter drops WG-decapped packets: their source (the VPN pool) has no
+      # reverse path in the main table
+      net.ipv4.conf.all.rp_filter: "0"
+      net.ipv4.conf.default.rp_filter: "0"
+    environment:
+      # `:-` and never `:?`: a `:?` breaks `docker compose` for profile-inactive
+      # services. The entrypoint enforces required-ness (fatal + restart loop)
+      # only when the profile is actually enabled.
+      WG_PEERS: ${WG_PEERS:-}
+      WG_POOL: ${WG_POOL:-10.10.20.0/24}
+      CHAIN_SOCKS_HOST: ${CHAIN_SOCKS_HOST:-vpndogs-router}
+      CHAIN_SOCKS_PORT: ${CHAIN_SOCKS_PORT:-1070}
+    volumes:
+      - wg-keys:/etc/wireguard
+    healthcheck:
+      test: ["CMD", "wg", "show", "wg0"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 20s
+    depends_on:
+      vpndogs-router:
+        condition: service_healthy
+    networks: [vpndogs]
+    restart: unless-stopped
+
 volumes:
   sb-router-cache:
   vpnconfig:
   ipsec-certs:
+  wg-keys:
 
 networks:
   vpndogs:

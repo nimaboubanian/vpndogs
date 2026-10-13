@@ -51,6 +51,12 @@ phone ──UDP 500/4500/1061──► vpndogs-ipsec-inbound   (strongswan-serve
                                  policy route ──► tun0 ──socks──► vpndogs-router :1070
 ```
 
+```
+laptop ──UDP 1062──► vpndogs-wg-inbound              (wireguard-server)   profile wg-inbound
+                        kernel wireguard decrypt
+                        policy route ──► tun0 ──socks──► vpndogs-router :1070
+```
+
 ## Prerequisites
 
 - Docker Engine with **compose v2.20+** (long-syntax `depends_on` with
@@ -68,6 +74,8 @@ phone ──UDP 500/4500/1061──► vpndogs-ipsec-inbound   (strongswan-serve
 | `SE_HOST`, `SE_PORT`, `SE_HUB`, `SE_USER`, `SE_PASSWORD` | SoftEther connection as env vars — alternative to a `.vpn` profile file. Most users leave these empty. |
 | `IPSEC_USERS`, `IPSEC_PSK`, `VPN_SERVER_ADDR` | **Required for the inbound IPsec node only** (profile `ipsec-inbound`). EAP credentials, the IKEv1 shared secret, and the address clients dial. |
 | `VPN_POOL`, `CLIENT_DNS` | Address pool and DNS pushed to inbound IPsec clients. |
+| `WG_PEERS` | **Required for the inbound WireGuard node only** (profile `wg-inbound`). `name:PUBLIC_KEY` pairs, comma-separated; BYO public keys only. |
+| `WG_POOL` | Address pool for inbound WireGuard clients (server takes the first address). |
 
 > Run an extra client (`COMPOSE_PROFILES=sb-client-2` etc.) *without* a
 > matching `SUB_URL_n` and that container will fail its subscription fetch and
@@ -137,6 +145,39 @@ fault rather than a missing module.
 **Enabled without credentials?** The container logs `FATAL: IPSEC_USERS is
 required` (or `IPSEC_PSK` / `VPN_SERVER_ADDR`) and restart-loops; the rest of
 the stack is unaffected.
+
+## Inbound WireGuard node (optional)
+
+Remote clients can also dial in over kernel WireGuard — no userspace daemon,
+the host's `wireguard` module does the work. Add `wg-inbound` to
+`COMPOSE_PROFILES`, set `WG_PEERS` in `.env`, and bring it up:
+
+```sh
+docker compose up -d vpndogs-wg-inbound
+```
+
+It publishes UDP **1062** only (open it on the firewall) and needs `NET_ADMIN`
++ `/dev/net/tun` — and the host `wireguard` kernel module
+(`lsmod | grep wireguard`; `sudo modprobe wireguard` if missing).
+
+Keys are bring-your-own, split across both sides: on each **client**
+(`wg genkey | tee privatekey | wg pubkey > publickey`), and only the
+**public** key goes into `WG_PEERS` as `name:PUBKEY` — private keys never
+touch the server. The full client conf template lives in
+`dogs/wireguard-server-docker/README.md` (Address = pool offset, `DNS`,
+`AllowedIPs = 0.0.0.0/0`, `PersistentKeepalive = 25`, server `PublicKey` and
+`Endpoint = <host>:1062` — the server's public key is printed by
+`docker exec vpndogs-wg-inbound report.sh`).
+
+Decrypted traffic enters the same chain as IPsec clients: domestic-direct /
+sb-cluster / blackhole via the router.
+
+**Enabled without credentials?** The container logs `FATAL: WG_PEERS is
+required` and restart-loops; the rest of the stack is unaffected.
+
+**`wg-keys` volume lost?** The server generates a NEW key on the next boot —
+every client conf's server `PublicKey` goes stale until you redistribute the
+new one from `report.sh`.
 
 ## `user-configs/`
 
