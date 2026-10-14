@@ -57,6 +57,12 @@ laptop ──UDP 1062──► vpndogs-wg-inbound              (wireguard-server
                         policy route ──► tun0 ──socks──► vpndogs-router :1070
 ```
 
+```
+tablet ──UDP 1063──► vpndogs-awg-inbound             (amneziawg-server)   profile awg-inbound
+                        userspace amneziawg-go decrypt (obfuscated 3.1 protocol)
+                        policy route ──► tun0 ──socks──► vpndogs-router :1070
+```
+
 ## Prerequisites
 
 - Docker Engine with **compose v2.20+** (long-syntax `depends_on` with
@@ -76,6 +82,9 @@ laptop ──UDP 1062──► vpndogs-wg-inbound              (wireguard-server
 | `VPN_POOL`, `CLIENT_DNS` | Address pool and DNS pushed to inbound IPsec clients. |
 | `WG_PEERS` | **Required for the inbound WireGuard node only** (profile `wg-inbound`). `name:PUBLIC_KEY` pairs, comma-separated; BYO public keys only. |
 | `WG_POOL` | Address pool for inbound WireGuard clients (server takes the first address). |
+| `AWG_PEERS` | **Required for the inbound AmneziaWG node only** (profile `awg-inbound`). Same format as `WG_PEERS`. |
+| `AWG_POOL` | Address pool for inbound AmneziaWG clients (server takes the first address). |
+| `AWG_HPK` | Optional shared HeaderProtectionKey (empty = off); must be identical in every client conf. |
 
 > Run an extra client (`COMPOSE_PROFILES=sb-client-2` etc.) *without* a
 > matching `SUB_URL_n` and that container will fail its subscription fetch and
@@ -178,6 +187,39 @@ required` and restart-loops; the rest of the stack is unaffected.
 **`wg-keys` volume lost?** The server generates a NEW key on the next boot —
 every client conf's server `PublicKey` goes stale until you redistribute the
 new one from `report.sh`.
+
+## Inbound AmneziaWG node (optional)
+
+Where plain WireGuard is fingerprinted and blocked, the obfuscated AmneziaWG
+protocol can still connect. Two userspace daemons do the work inside the
+container — **no host kernel module needed** (unlike the WG node). Requires
+AmneziaWG **3.1** clients (current Amnezia app / `awg-tools` ≥ 3.1; older
+AWG 1.x clients are unsupported). Add `awg-inbound` to `COMPOSE_PROFILES`,
+set `AWG_PEERS` in `.env` (and optionally the shared `AWG_HPK`), and bring
+it up:
+
+```sh
+docker compose up -d vpndogs-awg-inbound
+```
+
+It publishes UDP **1063** only (open it on the firewall) and needs
+`NET_ADMIN` + `/dev/net/tun`. Keys are bring-your-own like the WG node:
+client keypair generated client-side (`awg genkey | awg pubkey`), only the
+**public** key into `AWG_PEERS` as `name:PUBKEY`. The client conf must copy
+the server's obfuscation parameters **verbatim** (S1–S4, H1–H4, and the
+`HeaderProtectionKey` when `AWG_HPK` is set — a mismatch means handshakes
+never complete). The full template lives in
+`dogs/amneziawg-server-docker/README.md`; the server's public key and
+constants are printed by `docker exec vpndogs-awg-inbound report.sh`.
+
+Decrypted traffic enters the same chain as IPsec/WG clients:
+domestic-direct / sb-cluster / blackhole via the router.
+
+**Enabled without credentials?** The container logs `FATAL: AWG_PEERS is
+required` and restart-loops; the rest of the stack is unaffected.
+
+**`awg-keys` volume lost?** Same as the WG node: new server key on next
+boot, re-distribute the public key from `report.sh`.
 
 ## `user-configs/`
 
