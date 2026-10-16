@@ -47,6 +47,13 @@ wait_containers() {
 wait_containers
 sleep 5
 
+# canary: the stack network must stay IPv4-only — an IPv6-enabled network
+# would let containers egress IPv6 straight from the host, bypassing the
+# chain (see README Troubleshooting: dual-stack services blocked)
+net=$(docker inspect vpndogs-router -f '{{range $k, $v := .NetworkSettings.Networks}}{{$k}}{{end}}' 2>/dev/null || true)
+v6=$(docker network inspect "$net" -f '{{.EnableIPv6}}' 2>/dev/null || true)
+[ "$v6" = "false" ] || fail "stack network '$net' must stay IPv4-only (EnableIPv6=${v6:-unknown})"
+
 # any curl failure here must report, never abort silently under `set -e`
 if ! host_ip=$(curl -s --noproxy '*' --max-time 20 https://api.ipify.org) || [ -z "$host_ip" ]; then
     fail "direct egress (host): no IP from the baseline endpoint - internet or DNS is down, retry"

@@ -174,7 +174,8 @@ Keys are bring-your-own, split across both sides: on each **client**
 **public** key goes into `WG_PEERS` as `name:PUBKEY` — private keys never
 touch the server. The full client conf template lives in
 `dogs/wireguard-server-docker/README.md` (Address = pool offset, `DNS`,
-`AllowedIPs = 0.0.0.0/0`, `PersistentKeepalive = 25`, server `PublicKey` and
+`AllowedIPs = 0.0.0.0/0, ::/0` (the `::/0` closes the client-side IPv6 leak —
+see Troubleshooting), `PersistentKeepalive = 25`, server `PublicKey` and
 `Endpoint = <host>:1062` — the server's public key is printed by
 `docker exec vpndogs-wg-inbound report.sh`).
 
@@ -238,6 +239,16 @@ the sb-clients are stopped and started again — no ledger left behind.
 
 ## Troubleshooting
 
+- **Dual-stack services blocked while IPv4-only ones work** — a client-side
+  IPv6 leak: the inbound tunnels carry only IPv4 (`0.0.0.0/0`), so a
+  dual-stack client keeps using its native IPv6 *beside* the tunnel, and
+  services see the client's real (sanctioned-region) IPv6 address. Fix: add
+  `::/0` to the client's `AllowedIPs` (WG/AWG nodes — the server drops that
+  IPv6, native IPv6 returns when the tunnel is down); on native IKEv2 clients
+  disable IPv6 on the active interface. Section B itself is IPv4-only (the
+  `vpndogs` Docker network has no IPv6), so the leak is never in the stack.
+  Verify with `curl -6 https://api64.ipify.org` on the client with the tunnel
+  up: any answer = leak.
 - `docker compose logs <service>` — the usual first look.
 - Every dogs image ships a `report.sh`; paste its output into an issue:
   `docker exec vpndogs-sb-client-1 ./report.sh`
