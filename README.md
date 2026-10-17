@@ -237,6 +237,17 @@ configs/check.sh --failover   # plus: stop sb-clients -> softether takes over ->
 Each check must print `PASS: …` and the script exits 0. `--failover` damage:
 the sb-clients are stopped and started again — no ledger left behind.
 
+A fuller snapshot for issue reports or trying over time:
+
+```sh
+configs/report.sh             # vpndogs-report.md: topology diagram, live routing
+                              # rules, connected inbound IPs, 1MB quality of
+                              # every outbound, LB policies, last 10 logs
+```
+
+Runs ~1–2 min (it downloads 1 MB up/down per outbound) and needs only
+`docker`, `curl`, `jq`, `ss`, `awk` on the host. Not committed to git.
+
 ## Troubleshooting
 
 - **Dual-stack services blocked while IPv4-only ones work** — a client-side
