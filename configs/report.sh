@@ -18,7 +18,7 @@ IPSEC=vpndogs-ipsec-inbound
 WG=vpndogs-wg-inbound
 AWG=vpndogs-awg-inbound
 OVPN=vpndogs-ovpn-inbound
-CONTAINERS=("$ROUTER" "$SELECTOR" "$LB" vpndogs-sb-client-1 vpndogs-sb-client-2 vpndogs-sb-client-3 vpndogs-sb-client-4 "$SE" "$IPSEC" "$WG" "$AWG")
+CONTAINERS=("$ROUTER" "$SELECTOR" "$LB" vpndogs-sb-client-1 vpndogs-sb-client-2 vpndogs-sb-client-3 vpndogs-sb-client-4 "$SE" "$IPSEC" "$WG" "$AWG" "$OVPN")
 
 UL_BODY=$(mktemp)
 
