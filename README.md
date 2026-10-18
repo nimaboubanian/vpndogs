@@ -247,6 +247,8 @@ configs/report.sh             # vpndogs-report.md: topology diagram, live routin
 
 Runs ~1–2 min (it downloads 1 MB up/down per outbound) and needs only
 `docker`, `curl`, `jq`, `ss`, `awk` on the host. Not committed to git.
+If `uv` is installed it also shows a tqdm progress bar (one tick per
+report section; without uv you get plain `→ section` lines instead).
 
 ## Troubleshooting
 

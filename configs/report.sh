@@ -29,10 +29,37 @@ cip()   { docker inspect -f '{{range .NetworkSettings.Networks}}{{.IPAddress}}{{
 insp()  { docker inspect -f "$2" "$1" 2>/dev/null | grep -m1 . || echo -; }
 up_mark() { snu "$1" && echo UP || echo DOWN; }
 
-cleanup() { rm -f "$UL_BODY"; }
+cleanup() { rm -f "$UL_BODY"; rm -rf "$STEP_DIR"; [ -n "${BAR:-}" ] && kill "$BAR" 2>/dev/null; }
 trap cleanup EXIT
 
 s() { printf '%s\n' "$*" >> "$OUT"; }
+
+# progress bar: one tick per report section, real — the bar only advances
+# when a section actually finishes. Needs uv (for tqdm); without it each
+# section just prints "→ name" and the report is unchanged.
+STEP_DIR=$(mktemp -d)
+STEP_FIFO="$STEP_DIR/steps"
+mkfifo "$STEP_FIFO"
+BAR=""
+if uv run --quiet --with tqdm python3 -c 'import tqdm' >/dev/null 2>&1; then
+    uv run --quiet --with tqdm python3 -u -c '
+import sys
+from tqdm import tqdm
+with open(sys.argv[1]) as f, tqdm(total=int(sys.argv[2]), unit="section",
+        bar_format="{desc}  {bar} {n}/{total}", leave=True) as bar:
+    bar.set_description_str("starting")
+    for line in f:
+        line = line.strip()
+        if line == "+":
+            bar.update()
+        elif line:
+            bar.set_description_str(line)' "$STEP_FIFO" "$(grep -c '^step_end$' "$0")" &
+    BAR=$!
+    exec 3<> "$STEP_FIFO"
+fi
+alive() { [ -n "$BAR" ] && kill -0 "$BAR" 2>/dev/null; }
+step_start() { if alive; then printf '%s\n' "$1" >&3; else printf '→ %s\n' "$1" >&2; fi; }
+step_end()   { alive && printf '+\n' >&3; return 0; }
 
 # quality_probe <label> <curl proxy-args...>  — appends one table row
 quality_probe() {
@@ -57,6 +84,7 @@ quality_probe() {
 }
 
 : > "$OUT"
+step_start "hosts & containers"
 s "# vpndogs report — $(date -u '+%Y-%m-%dT%H:%M:%SZ')"
 s ""
 s "- kernel: \`$(uname -r)\`, load: $(uptime | sed 's/^.*load average://')"
@@ -81,7 +109,9 @@ for c in "${CONTAINERS[@]}"; do
     esac
 done
 s ""
+step_end
 
+step_start "topology"
 s "## Topology"
 s ""
 s '```'
@@ -108,12 +138,14 @@ s "local socks/http :1070 ──► router [$r]"
         s "                          backup ───────────────► $SE ○ (no failover)"
     fi
 }
-[ "$(up_mark "$IPSEC")" = UP ] && s " Многие &◄ ipsec-inbound ● UDP 500/4500/1061 → tun0 → router :1070"
+[ "$(up_mark "$IPSEC")" = UP ] && s " ipsec-inbound ● UDP 500/4500/1061 → tun0 → router :1070"
 [ "$(up_mark "$WG")"    = UP ] && s " wg-inbound  ● UDP 1062 → tun0 → router :1070"
 [ "$(up_mark "$AWG")"   = UP ] && s " awg-inbound ● UDP 1063 → tun0 → router :1070"
 s '```'
 s ""
+step_end
 
+step_start "inbounds & connected IPs"
 s "## Inbounds — connected IPs"
 s ""
 if snu "$ROUTER"; then
@@ -148,7 +180,9 @@ if ! snu "$IPSEC" && ! snu "$WG" && ! snu "$AWG"; then
     s "_no VPN inbound nodes running (profiles off)_"
     s ""
 fi
+step_end
 
+step_start "routing rules"
 s "## Routing rules (live router config)"
 s ""
 if snu "$ROUTER"; then
@@ -166,7 +200,9 @@ else
     s "_router not running_"
 fi
 s ""
+step_end
 
+step_start "outbound quality (~1-2 min)"
 s "## Outbound quality (1MB, cloudflare speed endpoints)"
 s ""
 s "| outbound | egress IP | download | upload | latency |"
@@ -183,7 +219,9 @@ done
 s ""
 s "_egress IP via api.ipify.org; latency = 6× tiny GET (avg + max−min jitter); down/up = 1MB via cloudflare speed endpoints; direct = host gateway; cluster = the real path router→selector→lb_"
 s ""
+step_end
 
+step_start "load balancer policies"
 s "## Load balancer policies"
 s ""
 s "**selector** — primary sb-cluster, backup softether (socks-handshake tcp-check):"
@@ -214,7 +252,9 @@ if snu "$LB"; then
     done
 fi
 s ""
+step_end
 
+step_start "last 10 logs per container"
 s "## Last 10 logs per container"
 s ""
 for c in "${CONTAINERS[@]}"; do
@@ -229,5 +269,7 @@ for c in "${CONTAINERS[@]}"; do
         s ""
     fi
 done
+step_end
 
+if [ -n "$BAR" ]; then exec 3>&-; wait "$BAR" 2>/dev/null; fi
 echo "wrote $OUT"
