@@ -63,6 +63,12 @@ tablet ──UDP 1063──► vpndogs-awg-inbound             (amneziawg-server
                         policy route ──► tun0 ──socks──► vpndogs-router :1070
 ```
 
+```
+handset ──TCP 1064──► vpndogs-ovpn-inbound           (openvpn-server)    profile ovpn-inbound
+                        openvpn tls-crypt-v2 decrypt (username/password)
+                        policy route ──► tun1 ──socks──► vpndogs-router :1070
+```
+
 ## Prerequisites
 
 - Docker Engine with **compose v2.20+** (long-syntax `depends_on` with
@@ -84,6 +90,8 @@ tablet ──UDP 1063──► vpndogs-awg-inbound             (amneziawg-server
 | `WG_POOL` | Address pool for inbound WireGuard clients (server takes the first address). |
 | `AWG_PEERS` | **Required for the inbound AmneziaWG node only** (profile `awg-inbound`). Same format as `WG_PEERS`. |
 | `AWG_POOL` | Address pool for inbound AmneziaWG clients (server takes the first address). |
+| `OVPN_USERS` | **Required for the inbound OpenVPN node only** (profile `ovpn-inbound`): `user:pass` entries, comma-separated. |
+| `OVPN_POOL` | Address pool for inbound OpenVPN clients. |
 | `AWG_HPK` | Optional shared HeaderProtectionKey (empty = off); must be identical in every client conf. |
 
 > Run an extra client (`COMPOSE_PROFILES=sb-client-2` etc.) *without* a
@@ -222,6 +230,46 @@ required` and restart-loops; the rest of the stack is unaffected.
 **`awg-keys` volume lost?** Same as the WG node: new server key on next
 boot, re-distribute the public key from `report.sh`.
 
+## Inbound OpenVPN node (optional)
+
+The fallback for networks that block or throttle UDP: OpenVPN over TCP on
+**1064/tcp** carries everything inside one reliable stream. Add
+`ovpn-inbound` to `COMPOSE_PROFILES`, set `OVPN_USERS` and `VPN_SERVER_ADDR`
+in `.env` (plus optionally `OVPN_POOL`), and bring it up:
+
+```sh
+docker compose up -d vpndogs-ovpn-inbound
+```
+
+Open port **1064/tcp** on the firewall. It needs `NET_ADMIN` + `/dev/net/tun`.
+Authentication is **username/password** — no client certificates, no
+bring-your-own keys. Issue a ready-to-use profile per user:
+
+```sh
+docker exec vpndogs-ovpn-inbound entrypoint.sh client-conf alice > alice.ovpn
+```
+
+The profile embeds the CA certificate and the `tls-crypt-v2` key but **no
+password**: OpenVPN Connect prompts on connect. The password lives only in
+the server's `.env`, so a profile is safe to hand to a phone and credentials
+are not. `VPN_SERVER_ADDR` must be exactly what clients dial — it becomes the
+server certificate's CN and SAN, and clients verify it.
+
+**Performance, stated plainly.** OpenVPN over TCP is genuinely slower than
+the WireGuard and AmneziaWG nodes. Inner TCP and UDP both travel inside one
+reliable TCP stream, so a single loss makes both the outer and inner TCP
+layers retransmit and back off — a stall the client experiences as a
+multi-second freeze. Nothing in the OpenVPN configuration disables this; it
+is the cost of the property that makes this node worth having.
+
+**Enabled without credentials?** The container logs `FATAL: OVPN_USERS is
+required` and restart-loops; the rest of the stack is unaffected.
+
+**`ovpn-state` volume lost?** This one is worse than the WG node: a new CA,
+server certificate and `tls-crypt-v2` key are minted, and **every existing
+client profile stops working**. Re-issue them all with `client-conf` after
+the container has booted once.
+
 ## `user-configs/`
 
 Draft directory for config overrides, **not wired in**. Wiring it in (config
@@ -258,10 +306,14 @@ report section; without uv you get plain `→ section` lines instead).
   services see the client's real (sanctioned-region) IPv6 address. Fix: add
   `::/0` to the client's `AllowedIPs` (WG/AWG nodes — the server drops that
   IPv6, native IPv6 returns when the tunnel is down); on native IKEv2 clients
-  disable IPv6 on the active interface. Section B itself is IPv4-only (the
-  `vpndogs` Docker network has no IPv6), so the leak is never in the stack.
-  Verify with `curl -6 https://api64.ipify.org` on the client with the tunnel
-  up: any answer = leak.
+  disable IPv6 on the active interface. On the OpenVPN node the server already
+  pushes `redirect-gateway def1 bypass-dhcp ipv6`, so its IPv6 goes into the
+  tunnel and the server drops it — a client still leaking there needs
+  `route-ipv6` in its profile (profiles issued by `client-conf` already carry
+  it). Section B itself is IPv4-only (the `vpndogs` Docker network has no
+  IPv6), so the leak is never in the stack. Verify with
+  `curl -6 https://api64.ipify.org` on the client with the tunnel up: any
+  answer = leak.
 - `docker compose logs <service>` — the usual first look.
 - Every dogs image ships a `report.sh`; paste its output into an issue:
   `docker exec vpndogs-sb-client-1 ./report.sh`

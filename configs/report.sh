@@ -17,6 +17,7 @@ SE=vpndogs-softether
 IPSEC=vpndogs-ipsec-inbound
 WG=vpndogs-wg-inbound
 AWG=vpndogs-awg-inbound
+OVPN=vpndogs-ovpn-inbound
 CONTAINERS=("$ROUTER" "$SELECTOR" "$LB" vpndogs-sb-client-1 vpndogs-sb-client-2 vpndogs-sb-client-3 vpndogs-sb-client-4 "$SE" "$IPSEC" "$WG" "$AWG")
 
 UL_BODY=$(mktemp)
@@ -141,6 +142,7 @@ s "local socks/http :1070 ──► router [$r]"
 [ "$(up_mark "$IPSEC")" = UP ] && s " ipsec-inbound ● UDP 500/4500/1061 → tun0 → router :1070"
 [ "$(up_mark "$WG")"    = UP ] && s " wg-inbound  ● UDP 1062 → tun0 → router :1070"
 [ "$(up_mark "$AWG")"   = UP ] && s " awg-inbound ● UDP 1063 → tun0 → router :1070"
+[ "$(up_mark "$OVPN")"  = UP ] && s " ovpn-inbound ● TCP 1064 → tun0 → tun1 → router :1070"
 s '```'
 s ""
 step_end
@@ -176,7 +178,14 @@ if [ "$(up_mark "$AWG")" = UP ]; then
     s '```'
     s ""
 fi
-if ! snu "$IPSEC" && ! snu "$WG" && ! snu "$AWG"; then
+if [ "$(up_mark "$OVPN")" = UP ]; then
+    s "**$OVPN** — TCP 1064, connected clients:"
+    s '```'
+    s "$(docker exec "$OVPN" cat /etc/openvpn/status.log 2>/dev/null || true)"
+    s '```'
+    s ""
+fi
+if ! snu "$IPSEC" && ! snu "$WG" && ! snu "$AWG" && ! snu "$OVPN"; then
     s "_no VPN inbound nodes running (profiles off)_"
     s ""
 fi
