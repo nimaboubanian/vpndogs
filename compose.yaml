@@ -69,7 +69,7 @@ services:
     container_name: vpndogs-sb-client-1
     environment:
       SUB_URL: ${SUB_URL_1:?SUB_URL_1 is required}
-      FINAL_TAG: "💦 🔗 Best Ping 🚀"
+      FINAL_TAG: ${FINAL_TAG:-💦 🔗 Best Ping 🚀}
     healthcheck:
       test: ["CMD-SHELL", "timeout 3 bash -c 'exec 3<>/dev/tcp/127.0.0.1/1081'"]
       interval: 10s
@@ -87,7 +87,7 @@ services:
     profiles: ["sb-client-2"]
     environment:
       SUB_URL: ${SUB_URL_2:-}
-      FINAL_TAG: "💦 🔗 Best Ping 🚀"
+      FINAL_TAG: ${FINAL_TAG:-💦 🔗 Best Ping 🚀}
     healthcheck:
       test: ["CMD-SHELL", "timeout 3 bash -c 'exec 3<>/dev/tcp/127.0.0.1/1081'"]
       interval: 10s
@@ -105,7 +105,7 @@ services:
     profiles: ["sb-client-3"]
     environment:
       SUB_URL: ${SUB_URL_3:-}
-      FINAL_TAG: "💦 🔗 Best Ping 🚀"
+      FINAL_TAG: ${FINAL_TAG:-💦 🔗 Best Ping 🚀}
     healthcheck:
       test: ["CMD-SHELL", "timeout 3 bash -c 'exec 3<>/dev/tcp/127.0.0.1/1081'"]
       interval: 10s
@@ -123,7 +123,7 @@ services:
     profiles: ["sb-client-4"]
     environment:
       SUB_URL: ${SUB_URL_4:-}
-      FINAL_TAG: "💦 🔗 Best Ping 🚀"
+      FINAL_TAG: ${FINAL_TAG:-💦 🔗 Best Ping 🚀}
     healthcheck:
       test: ["CMD-SHELL", "timeout 3 bash -c 'exec 3<>/dev/tcp/127.0.0.1/1081'"]
       interval: 10s
