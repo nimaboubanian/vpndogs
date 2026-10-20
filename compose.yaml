@@ -68,7 +68,7 @@ services:
     networks: [vpndogs]
     restart: unless-stopped
 
-  sb-client-1:
+  vpndogs-sb-client-1:
     image: nimaboubanian/sing-box-client
     container_name: vpndogs-sb-client-1
     environment:
@@ -88,7 +88,7 @@ services:
         aliases: [sb1]
     restart: unless-stopped
 
-  sb-client-2:
+  vpndogs-sb-client-2:
     image: nimaboubanian/sing-box-client
     container_name: vpndogs-sb-client-2
     profiles: ["sb-client-2"]
@@ -109,7 +109,7 @@ services:
         aliases: [sb2]
     restart: unless-stopped
 
-  sb-client-3:
+  vpndogs-sb-client-3:
     image: nimaboubanian/sing-box-client
     container_name: vpndogs-sb-client-3
     profiles: ["sb-client-3"]
@@ -130,7 +130,7 @@ services:
         aliases: [sb3]
     restart: unless-stopped
 
-  sb-client-4:
+  vpndogs-sb-client-4:
     image: nimaboubanian/sing-box-client
     container_name: vpndogs-sb-client-4
     profiles: ["sb-client-4"]

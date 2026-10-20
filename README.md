@@ -80,9 +80,9 @@ handset ──TCP 1064──► vpndogs-ovpn-inbound           (openvpn-server) 
 
 | Variable | Meaning |
 |---|---|
-| `SUB_URL_1` | **Required.** Subscription link for `sb-client-1` (the always-on client). Compose refuses to start without it. |
+| `SUB_URL_1` | **Required.** Subscription link for `vpndogs-sb-client-1` (the always-on client). Compose refuses to start without it. |
 | `SUB_URL_2..4` | Optional; only read when the matching profile is enabled. |
-| `FINAL_TAG` | Optional `urltest` group tag for `sb-client-1..4` (defaults to `💦 🔗 Best Ping 🚀`). |
+| `FINAL_TAG` | Optional `urltest` group tag for `vpndogs-sb-client-1..4` (defaults to `💦 🔗 Best Ping 🚀`). |
 | `COMPOSE_PROFILES` | Which extra clients to run, e.g. `sb-client-2,sb-client-4`. |
 | `VPN_PROFILE` | SoftEther profile name (without the `.vpn` extension) in `vpn-profiles/` — e.g. `DEFAULT-main`. |
 | `SE_HOST`, `SE_PORT`, `SE_HUB`, `SE_USER`, `SE_PASSWORD` | SoftEther connection as env vars — alternative to a `.vpn` profile file. Most users leave these empty. |
