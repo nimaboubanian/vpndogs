@@ -1,4 +1,19 @@
 services:
+  vpndogs-watchdog:
+    image: nimaboubanian/watchdog
+    container_name: vpndogs-watchdog
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - selector-config:/etc/haproxy-selector
+    healthcheck:
+      test: ["CMD-SHELL", "test -s /etc/haproxy-selector/haproxy.cfg && docker info >/dev/null 2>&1"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 5s
+    networks: [vpndogs]
+    restart: unless-stopped
+
   vpndogs-router:
     image: nimaboubanian/sing-box-router
     container_name: vpndogs-router
@@ -25,7 +40,7 @@ services:
     image: haproxy:lts-alpine
     container_name: vpndogs-selector
     volumes:
-      - ./configs/selector/haproxy.cfg:/usr/local/etc/haproxy/haproxy.cfg:ro
+      - selector-config:/usr/local/etc/haproxy:ro
     healthcheck:
       test: ["CMD-SHELL", "nc -z 127.0.0.1 1080"]
       interval: 10s
@@ -33,10 +48,8 @@ services:
       retries: 3
       start_period: 10s
     depends_on:
-      vpndogs-sb-clients-lb:
+      vpndogs-watchdog:
         condition: service_healthy
-      vpndogs-softether:
-        condition: service_started
     networks: [vpndogs]
     restart: unless-stopped
 
@@ -50,17 +63,8 @@ services:
       retries: 3
       start_period: 10s
     depends_on:
-      sb-client-1:
+      vpndogs-watchdog:
         condition: service_healthy
-      sb-client-2:
-        condition: service_healthy
-        required: false
-      sb-client-3:
-        condition: service_healthy
-        required: false
-      sb-client-4:
-        condition: service_healthy
-        required: false
     networks: [vpndogs]
     restart: unless-stopped
 
@@ -76,6 +80,9 @@ services:
       timeout: 5s
       retries: 3
       start_period: 90s
+    depends_on:
+      vpndogs-watchdog:
+        condition: service_healthy
     networks:
       vpndogs:
         aliases: [sb1]
@@ -94,6 +101,9 @@ services:
       timeout: 5s
       retries: 3
       start_period: 90s
+    depends_on:
+      vpndogs-watchdog:
+        condition: service_healthy
     networks:
       vpndogs:
         aliases: [sb2]
@@ -112,6 +122,9 @@ services:
       timeout: 5s
       retries: 3
       start_period: 90s
+    depends_on:
+      vpndogs-watchdog:
+        condition: service_healthy
     networks:
       vpndogs:
         aliases: [sb3]
@@ -130,6 +143,9 @@ services:
       timeout: 5s
       retries: 3
       start_period: 90s
+    depends_on:
+      vpndogs-watchdog:
+        condition: service_healthy
     networks:
       vpndogs:
         aliases: [sb4]
@@ -160,6 +176,9 @@ services:
       timeout: 5s
       retries: 3
       start_period: 30s
+    depends_on:
+      vpndogs-watchdog:
+        condition: service_healthy
     networks: [vpndogs]
     restart: unless-stopped
 
@@ -340,6 +359,7 @@ services:
     restart: unless-stopped
 
 volumes:
+  selector-config:
   sb-router-cache:
   vpnconfig:
   ipsec-certs:

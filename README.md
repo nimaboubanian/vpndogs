@@ -9,20 +9,23 @@ docker compose up -d
 ```
 
 The images are built and published from the separate `dogs/` repositories and
-pulled from Docker Hub: `nimaboubanian/sing-box-router`,
-`nimaboubanian/sing-box-client`, `nimaboubanian/sing-box-lb`,
-`nimaboubanian/softether-vpn-client`.
+pulled from Docker Hub: `nimaboubanian/watchdog`,
+`nimaboubanian/sing-box-router`, `nimaboubanian/sing-box-client`,
+`nimaboubanian/sing-box-lb`, `nimaboubanian/softether-vpn-client`.
 
 ## Architecture
 
 ```
-host :1070 ──► vpndogs-router            (sing-box-router)   socks5+http inbound
+vpndogs-watchdog                           (watchdog)          seeds selector-config + stack checks/reports
+  │
+  ▼
+host :1070 ──► vpndogs-router              (sing-box-router)   socks5+http inbound
                  route: reject rulesets ────────────────► block (blackhole)
                  route: geoip-ir / geosite-ir / private ► direct (host gateway)
                  everything else ───────────────────────► proxy-out
                  │
                  ▼
-               vpndogs-selector            (haproxy:lts-alpine + configs/selector/haproxy.cfg)  :1080
+               vpndogs-selector            (haproxy:lts-alpine + selector-config volume)  :1080
                  ├─ default: vpndogs-sb-clients-lb   (sing-box-lb)   :1081   roundrobin
                  │             ├─► vpndogs-sb-client-1   (sing-box-client)  SUB_URL_1   always on
                  │             ├─► vpndogs-sb-client-2   (sing-box-client)  SUB_URL_2   profile sb-client-2
@@ -71,9 +74,7 @@ handset ──TCP 1064──► vpndogs-ovpn-inbound           (openvpn-server) 
 
 ## Prerequisites
 
-- Docker Engine with **compose v2.20+** (long-syntax `depends_on` with
-  `required: false`).
-- `curl` and `bash` on the host, for the verification script.
+- Docker Engine with **compose v2.20+**.
 
 ## The `.env` file (copy of `.env.example`)
 
@@ -110,7 +111,7 @@ directory is invisible to git — create it if absent.
 profile nor `SE_*` vars, the image's entrypoint exits (`SE_HUB is required for
 environment-based VPN setup`) and docker restarts it forever. Routing through
 the sb-cluster is unaffected — but there is no failover until you configure it,
-and `configs/check.sh --failover` will say so explicitly:
+and `docker exec vpndogs-watchdog check.sh --failover` will say so explicitly:
 
 ```sh
 mkdir -p vpn-profiles
@@ -279,8 +280,8 @@ overrides, compose overrides) is a future feature.
 ## Verifying
 
 ```sh
-configs/check.sh              # remote egress, domestic egress, blackhole
-configs/check.sh --failover   # plus: stop sb-clients -> softether takes over -> they come back
+docker exec vpndogs-watchdog check.sh              # remote egress, domestic egress, blackhole
+docker exec vpndogs-watchdog check.sh --failover   # plus: stop sb-clients -> softether takes over -> they come back
 ```
 
 Each check must print `PASS: …` and the script exits 0. `--failover` damage:
@@ -289,15 +290,14 @@ the sb-clients are stopped and started again — no ledger left behind.
 A fuller snapshot for issue reports or trying over time:
 
 ```sh
-configs/report.sh             # vpndogs-report.md: topology diagram, live routing
-                              # rules, connected inbound IPs, 1MB quality of
-                              # every outbound, LB policies, last 10 logs
+docker exec vpndogs-watchdog report.sh > vpndogs-report.md
+                                      # vpndogs-report.md: topology diagram, live routing
+                                      # rules, connected inbound IPs, 1MB quality of
+                                      # every outbound, LB policies, last 10 logs
 ```
 
-Runs ~1–2 min (it downloads 1 MB up/down per outbound) and needs only
-`docker`, `curl`, `jq`, `ss`, `awk` on the host. Not committed to git.
-If `uv` is installed it also shows a tqdm progress bar (one tick per
-report section; without uv you get plain `→ section` lines instead).
+Runs ~1–2 min (it downloads 1 MB up/down per outbound) inside
+`vpndogs-watchdog` — no extra tools needed on the host. Not committed to git.
 
 ## Troubleshooting
 
