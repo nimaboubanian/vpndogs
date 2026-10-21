@@ -288,7 +288,7 @@ the container has booted once.
 
 Where VPN protocols are actively probed, throttled, or fingerprinted by DPI, Trojan over TCP+TLS on **443/tcp** masquerades as legitimate HTTPS web traffic. Browser traffic and DPI active probes cleanly fall back to an internal web server hosting an authentic, self-contained Persian maintenance static website (`www/index.html`).
 
-Automated Let's Encrypt certificates are acquired and renewed for both `<TLS_DOMAIN>` and `www.<TLS_DOMAIN>`. Public HTTP on port **80/tcp** is handled by `nginx` to proxy ACME HTTP-01 challenges to `sing-box` (:8081) and redirect web visitors to HTTPS (`301 Moved Permanently`). An unauthenticated local SOCKS5 proxy is also exposed on `127.0.0.1:1065`.
+Automated Let's Encrypt certificates are acquired and renewed for `<TLS_DOMAIN>`. Public HTTP on port **80/tcp** is handled by `nginx` to proxy ACME HTTP-01 challenges to `sing-box` (:8081) and redirect web visitors to HTTPS (`301 Moved Permanently`). An unauthenticated local SOCKS5 proxy is also exposed on `127.0.0.1:1065`.
 
 Unlike the L3 tunnel siblings, **no kernel modules, `/dev/net/tun`, or `NET_ADMIN` privileges are needed**; `sing-box` is an L4 stream proxy that chains authenticated connections directly into `vpndogs-router:1070`.
 
