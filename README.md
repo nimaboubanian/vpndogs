@@ -11,7 +11,8 @@ docker compose up -d
 The images are built and published from the separate `dogs/` repositories and
 pulled from Docker Hub: `nimaboubanian/watchdog`,
 `nimaboubanian/sing-box-router`, `nimaboubanian/sing-box-client`,
-`nimaboubanian/sing-box-lb`, `nimaboubanian/softether-vpn-client`.
+`nimaboubanian/sing-box-lb`, `nimaboubanian/softether-vpn-client`,
+`nimaboubanian/sing-box-server`.
 
 ## Architecture
 
@@ -72,6 +73,14 @@ handset ──TCP 1064──► vpndogs-ovpn-inbound           (openvpn-server) 
                         policy route ──► tun1 ──socks──► vpndogs-router :1070
 ```
 
+```
+browser/probes ──TCP 443 (TLS)──► vpndogs-tls-inbound   (sing-box-server)   profile tls-inbound
+                                    sing-box trojan + ACME (apex+www domain)
+                                    fallback ──► nginx:8080 (Persian maintenance page)
+                                    HTTP 80 ──► nginx (ACME challenge proxy + 301 https redirect)
+                                    Trojan auth / :1065 socks ──► vpndogs-router :1070
+```
+
 ## Prerequisites
 
 - Docker Engine with **compose v2.20+**.
@@ -95,6 +104,9 @@ handset ──TCP 1064──► vpndogs-ovpn-inbound           (openvpn-server) 
 | `OVPN_USERS` | **Required for the inbound OpenVPN node only** (profile `ovpn-inbound`): `user:pass` entries, comma-separated. |
 | `OVPN_POOL` | Address pool for inbound OpenVPN clients. |
 | `AWG_HPK` | Optional shared HeaderProtectionKey (empty = off); must be identical in every client conf. |
+| `TLS_DOMAIN` | **Required for the inbound TLS node only** (profile `tls-inbound`). Domain pointing to this server for automated Let's Encrypt certificates and Trojan SNI. |
+| `TLS_USERS` | **Required for the inbound TLS node only** (profile `tls-inbound`): `user:pass` entries, comma-separated. |
+| `TLS_EMAIL` | Optional email for Let's Encrypt expiration alerts on the TLS inbound node. |
 
 > Run an extra client (`COMPOSE_PROFILES=sb-client-2` etc.) *without* a
 > matching `SUB_URL_n` and that container will fail its subscription fetch and
@@ -271,6 +283,36 @@ required` and restart-loops; the rest of the stack is unaffected.
 server certificate and `tls-crypt-v2` key are minted, and **every existing
 client profile stops working**. Re-issue them all with `client-conf` after
 the container has booted once.
+
+## Inbound TLS (Trojan) node (optional)
+
+Where VPN protocols are actively probed, throttled, or fingerprinted by DPI, Trojan over TCP+TLS on **443/tcp** masquerades as legitimate HTTPS web traffic. Browser traffic and DPI active probes cleanly fall back to an internal web server hosting an authentic, self-contained Persian maintenance static website (`www/index.html`).
+
+Automated Let's Encrypt certificates are acquired and renewed for both `<TLS_DOMAIN>` and `www.<TLS_DOMAIN>`. Public HTTP on port **80/tcp** is handled by `nginx` to proxy ACME HTTP-01 challenges to `sing-box` (:8081) and redirect web visitors to HTTPS (`301 Moved Permanently`). An unauthenticated local SOCKS5 proxy is also exposed on `127.0.0.1:1065`.
+
+Unlike the L3 tunnel siblings, **no kernel modules, `/dev/net/tun`, or `NET_ADMIN` privileges are needed**; `sing-box` is an L4 stream proxy that chains authenticated connections directly into `vpndogs-router:1070`.
+
+Add `tls-inbound` to `COMPOSE_PROFILES`, set `TLS_DOMAIN` and `TLS_USERS` in `.env`, and bring it up:
+
+```sh
+docker compose up -d vpndogs-tls-inbound
+```
+
+Open ports **80/tcp** and **443/tcp** on your firewall.
+
+Generate client configuration profiles with:
+
+```sh
+# Standard trojan:// URI (v2rayN, v2rayNG, Streisand, Shadowrocket, etc.)
+docker exec vpndogs-tls-inbound entrypoint.sh client-conf alice
+
+# sing-box client JSON configuration
+docker exec vpndogs-tls-inbound entrypoint.sh client-conf alice --json
+```
+
+**Enabled without credentials?** The container logs `FATAL: TLS_DOMAIN is required` or `FATAL: TLS_USERS is required` and restart-loops; the rest of the stack is unaffected.
+
+**`tls-certs` volume:** Stores the Let's Encrypt account keys and certificates in `/var/lib/sing-box/acme`.
 
 ## `user-configs/`
 

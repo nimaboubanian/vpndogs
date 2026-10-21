@@ -358,6 +358,38 @@ services:
     networks: [vpndogs]
     restart: unless-stopped
 
+  vpndogs-tls-inbound:
+    image: nimaboubanian/sing-box-server
+    container_name: vpndogs-tls-inbound
+    profiles: ["tls-inbound"]
+    ports:
+      - "80:80/tcp"
+      - "443:443/tcp"
+      - "127.0.0.1:1065:1065/tcp"
+    environment:
+      # `:-` and never `:?`: a `:?` breaks `docker compose` for profile-inactive
+      # services. The entrypoint enforces required-ness (fatal + restart loop)
+      # only when the profile is actually enabled.
+      TLS_DOMAIN: ${TLS_DOMAIN:-}
+      TLS_USERS: ${TLS_USERS:-}
+      TLS_EMAIL: ${TLS_EMAIL:-}
+      CHAIN_SOCKS_HOST: ${CHAIN_SOCKS_HOST:-vpndogs-router}
+      CHAIN_SOCKS_PORT: ${CHAIN_SOCKS_PORT:-1070}
+      LOG_LEVEL: ${LOG_LEVEL:-warn}
+    volumes:
+      - tls-certs:/var/lib/sing-box/acme
+    healthcheck:
+      test: ["CMD", "bash", "-c", "exec 3<>/dev/tcp/127.0.0.1/1065 && exec 4<>/dev/tcp/127.0.0.1/80"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 20s
+    depends_on:
+      vpndogs-router:
+        condition: service_healthy
+    networks: [vpndogs]
+    restart: unless-stopped
+
 volumes:
   selector-config:
   sb-router-cache:
@@ -366,6 +398,7 @@ volumes:
   wg-keys:
   awg-keys:
   ovpn-state:
+  tls-certs:
 
 networks:
   vpndogs:
