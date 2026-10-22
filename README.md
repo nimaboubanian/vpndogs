@@ -10,8 +10,8 @@ docker compose up -d
 
 The images are built and published from the separate `dogs/` repositories and
 pulled from Docker Hub: `nimaboubanian/watchdog`,
-`nimaboubanian/sing-box-router`, `nimaboubanian/sing-box-client`,
-`nimaboubanian/sing-box-lb`, `nimaboubanian/softether-vpn-client`,
+`nimaboubanian/sing-box-router`, `nimaboubanian/xray-client`,
+`nimaboubanian/xray-lb`, `nimaboubanian/softether-vpn-client`,
 `nimaboubanian/sing-box-server`.
 
 ## Architecture
@@ -27,11 +27,11 @@ host :1070 ──► vpndogs-router              (sing-box-router)   socks5+http
                  │
                  ▼
                vpndogs-selector            (haproxy:lts-alpine + selector-config volume)  :1080
-                 ├─ default: vpndogs-sb-clients-lb   (sing-box-lb)   :1081   roundrobin
-                 │             ├─► vpndogs-sb-client-1   (sing-box-client)  SUB_URL_1   always on
-                 │             ├─► vpndogs-sb-client-2   (sing-box-client)  SUB_URL_2   profile sb-client-2
-                 │             ├─► vpndogs-sb-client-3   (sing-box-client)  SUB_URL_3   profile sb-client-3
-                 │             └─► vpndogs-sb-client-4   (sing-box-client)  SUB_URL_4   profile sb-client-4
+                 ├─ default: vpndogs-sb-clients-lb   (xray-lb)   :1081   roundrobin
+                 │             ├─► vpndogs-sb-client-1   (xray-client)  SUB_URL_1   always on
+                 │             ├─► vpndogs-sb-client-2   (xray-client)  SUB_URL_2   profile sb-client-2
+                 │             ├─► vpndogs-sb-client-3   (xray-client)  SUB_URL_3   profile sb-client-3
+                 │             └─► vpndogs-sb-client-4   (xray-client)  SUB_URL_4   profile sb-client-4
                  └─ backup:  vpndogs-softether          (softether-vpn-client) :1082   gost egress
                                mounts ./vpn-profiles (read-only), NET_ADMIN + /dev/net/tun
 ```
@@ -91,7 +91,11 @@ browser/probes ──TCP 443 (TLS)──► vpndogs-tls-inbound   (sing-box-serv
 |---|---|
 | `SUB_URL_1` | **Required.** Subscription link for `vpndogs-sb-client-1` (the always-on client). Compose refuses to start without it. |
 | `SUB_URL_2..4` | Optional; only read when the matching profile is enabled. |
-| `FINAL_TAG` | Optional `urltest` group tag for `vpndogs-sb-client-1..4` (defaults to `💦 🔗 Best Ping 🚀`). |
+| `FINAL_TAG` | Optional profile label for `vpndogs-sb-client-1..4`, matched against the subscription's `remarks` labels (defaults to `💦 🔗 Smart Fragment 🧠`). |
+| `LOG_LEVEL` | Optional log level for the router and the clients (default `warn`; the clients translate it to xray's `warning`). |
+| `RESTART_INTERVAL` | Optional scheduled tunnel refresh in seconds for the clients (default `0` = off). |
+| `HANDSHAKE_TIMEOUT` | Optional outbound handshake budget for the clients (default `15`; the panel ships `4`, but a fragmented two-hop handshake costs 1–4.6 s). |
+| `PROBE_URL` | Optional observatory probe URL for the clients (default `https://8.8.8.8/dns-query`; **must be an IP literal**). |
 | `COMPOSE_PROFILES` | Which extra clients to run, e.g. `sb-client-2,sb-client-4`. |
 | `VPN_PROFILE` | SoftEther profile name (without the `.vpn` extension) in `vpn-profiles/` — e.g. `DEFAULT-main`. |
 | `SE_HOST`, `SE_PORT`, `SE_HUB`, `SE_USER`, `SE_PASSWORD` | SoftEther connection as env vars — alternative to a `.vpn` profile file. Most users leave these empty. |
@@ -111,6 +115,28 @@ browser/probes ──TCP 443 (TLS)──► vpndogs-tls-inbound   (sing-box-serv
 > Run an extra client (`COMPOSE_PROFILES=sb-client-2` etc.) *without* a
 > matching `SUB_URL_n` and that container will fail its subscription fetch and
 > restart in a loop. The rest of the stack is unaffected.
+
+### The clients are Xray-core
+
+`vpndogs-sb-client-1..4` run the GFW-knocker **Xray-core** fork, not
+sing-box, so the tunnel can use the panel's TLS-hello **fragmentation**
+profiles. Two consequences for the `.env`:
+
+- The subscription is the `?app=xray` one: a JSON **array** of complete Xray
+  configs, one per `remarks` label. `FINAL_TAG` picks one of them.
+- The **path segment picks the label set**. `/sub/fragment?app=xray` serves
+  the 120 fragmentation profiles (their labels carry an `F`, and they
+  include the default `💦 🔗 Smart Fragment 🧠`); `/sub/normal?app=xray`
+  serves the 116 unfragmented ones — no `F`, and no Smart Fragment label at
+  all. Pointing a client at `/sub/normal` while `FINAL_TAG` names a
+  fragment profile makes that client exit with `no profile tagged …`.
+
+An extra client (2, 3 or 4) is enabled by putting its profile in
+`COMPOSE_PROFILES` and giving it its own `SUB_URL_n` — a different panel per
+client gives distinct exit IPs. Everything else is shared: `FINAL_TAG`,
+`LOG_LEVEL`, `RESTART_INTERVAL`, `HANDSHAKE_TIMEOUT` and `PROBE_URL` are the
+same for all four, so the extra clients differ only in which panel they
+fetch from.
 
 ## `vpn-profiles/`
 
@@ -359,10 +385,12 @@ Runs ~1–2 min (it downloads 1 MB up/down per outbound) inside
   answer = leak.
 - `docker compose logs <service>` — the usual first look.
 - Every dogs image ships a `report.sh`; paste its output into an issue:
-  `docker exec vpndogs-sb-client-1 ./report.sh`
-- `docker compose ps` — health states. `start_period` is generous (up to 90s
-  on the clients: subscription fetch + render + run), so patience first
-  before diagnosing.
+  `docker exec vpndogs-sb-client-1 report.sh`
+- `docker compose ps` — health states. `start_period` is generous (up to 120s
+  on the clients: subscription fetch + render + run + the observatory's first
+  round), so patience first before diagnosing. The clients' healthcheck is a
+  real end-to-end tunnel fetch, not a TCP connect — it only goes healthy
+  once the tunnel actually carries traffic.
 
 ## Where the images come from
 
