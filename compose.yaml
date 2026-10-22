@@ -78,6 +78,8 @@ services:
     environment:
       SUB_URL: ${SUB_URL_1:?SUB_URL_1 is required}
       FINAL_TAG: ${FINAL_TAG:-💦 🔗 Smart Fragment 🧠}
+      LOG_LEVEL: ${LOG_LEVEL:-warn}
+      RESTART_INTERVAL: ${RESTART_INTERVAL:-0}
       HANDSHAKE_TIMEOUT: ${HANDSHAKE_TIMEOUT:-15}
       PROBE_URL: "${PROBE_URL:-https://8.8.8.8/dns-query}"
     healthcheck:
@@ -106,6 +108,8 @@ services:
     environment:
       SUB_URL: ${SUB_URL_2:-}
       FINAL_TAG: ${FINAL_TAG:-💦 🔗 Smart Fragment 🧠}
+      LOG_LEVEL: ${LOG_LEVEL:-warn}
+      RESTART_INTERVAL: ${RESTART_INTERVAL:-0}
       HANDSHAKE_TIMEOUT: ${HANDSHAKE_TIMEOUT:-15}
       PROBE_URL: "${PROBE_URL:-https://8.8.8.8/dns-query}"
     healthcheck:
@@ -134,6 +138,8 @@ services:
     environment:
       SUB_URL: ${SUB_URL_3:-}
       FINAL_TAG: ${FINAL_TAG:-💦 🔗 Smart Fragment 🧠}
+      LOG_LEVEL: ${LOG_LEVEL:-warn}
+      RESTART_INTERVAL: ${RESTART_INTERVAL:-0}
       HANDSHAKE_TIMEOUT: ${HANDSHAKE_TIMEOUT:-15}
       PROBE_URL: "${PROBE_URL:-https://8.8.8.8/dns-query}"
     healthcheck:
@@ -162,6 +168,8 @@ services:
     environment:
       SUB_URL: ${SUB_URL_4:-}
       FINAL_TAG: ${FINAL_TAG:-💦 🔗 Smart Fragment 🧠}
+      LOG_LEVEL: ${LOG_LEVEL:-warn}
+      RESTART_INTERVAL: ${RESTART_INTERVAL:-0}
       HANDSHAKE_TIMEOUT: ${HANDSHAKE_TIMEOUT:-15}
       PROBE_URL: "${PROBE_URL:-https://8.8.8.8/dns-query}"
     healthcheck:
