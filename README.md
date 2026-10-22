@@ -27,11 +27,11 @@ host :1070 ──► vpndogs-router              (sing-box-router)   socks5+http
                  │
                  ▼
                vpndogs-selector            (haproxy:lts-alpine + selector-config volume)  :1080
-                 ├─ default: vpndogs-sb-clients-lb   (xray-lb)   :1081   roundrobin
-                 │             ├─► vpndogs-sb-client-1   (xray-client)  SUB_URL_1   always on
-                 │             ├─► vpndogs-sb-client-2   (xray-client)  SUB_URL_2   profile sb-client-2
-                 │             ├─► vpndogs-sb-client-3   (xray-client)  SUB_URL_3   profile sb-client-3
-                 │             └─► vpndogs-sb-client-4   (xray-client)  SUB_URL_4   profile sb-client-4
+                 ├─ default: vpndogs-xray-clients-lb   (xray-lb)   :1081   roundrobin
+                 │             ├─► vpndogs-xray-client-1   (xray-client)  SUB_URL_1   always on
+                 │             ├─► vpndogs-xray-client-2   (xray-client)  SUB_URL_2   profile xray-client-2
+                 │             ├─► vpndogs-xray-client-3   (xray-client)  SUB_URL_3   profile xray-client-3
+                 │             └─► vpndogs-xray-client-4   (xray-client)  SUB_URL_4   profile xray-client-4
                  └─ backup:  vpndogs-softether          (softether-vpn-client) :1082   gost egress
                                mounts ./vpn-profiles (read-only), NET_ADMIN + /dev/net/tun
 ```
@@ -40,10 +40,10 @@ Only `127.0.0.1:1070` is published to the host. Traffic entering there takes
 one of three exits:
 
 - **Domestic** — Iran-domain/IP rulesets go out through the host's gateway.
-- **Remote** — everything else goes out through the proxy chain (sb-cluster).
+- **Remote** — everything else goes out through the proxy chain (xray-cluster).
 - **Blackhole** — reject-listed domains (ads, …) are dropped.
 
-When the sb-cluster dies, the selector automatically fails over to the
+When the xray-cluster dies, the selector automatically fails over to the
 SoftEther fallback and returns to the cluster when it recovers.
 
 An optional inbound node accepts connections *from* remote clients and feeds
@@ -89,14 +89,14 @@ browser/probes ──TCP 443 (TLS)──► vpndogs-tls-inbound   (sing-box-serv
 
 | Variable | Meaning |
 |---|---|
-| `SUB_URL_1` | **Required.** Subscription link for `vpndogs-sb-client-1` (the always-on client). Compose refuses to start without it. |
+| `SUB_URL_1` | **Required.** Subscription link for `vpndogs-xray-client-1` (the always-on client). Compose refuses to start without it. |
 | `SUB_URL_2..4` | Optional; only read when the matching profile is enabled. |
-| `FINAL_TAG` | Optional profile label for `vpndogs-sb-client-1..4`, matched against the subscription's `remarks` labels (defaults to `💦 🔗 Smart Fragment 🧠`). |
+| `FINAL_TAG` | Optional profile label for `vpndogs-xray-client-1..4`, matched against the subscription's `remarks` labels (defaults to `💦 🔗 Smart Fragment 🧠`). |
 | `LOG_LEVEL` | Optional log level for the router and the clients (default `warn`; the clients translate it to xray's `warning`). |
 | `RESTART_INTERVAL` | Optional scheduled tunnel refresh in seconds for the clients (default `0` = off). |
 | `HANDSHAKE_TIMEOUT` | Optional outbound handshake budget for the clients (default `15`; the panel ships `4`, but a fragmented two-hop handshake costs 1–4.6 s). |
 | `PROBE_URL` | Optional observatory probe URL for the clients (default `https://8.8.8.8/dns-query`; **must be an IP literal**). |
-| `COMPOSE_PROFILES` | Which extra clients to run, e.g. `sb-client-2,sb-client-4`. |
+| `COMPOSE_PROFILES` | Which extra clients to run, e.g. `xray-client-2,xray-client-4`. |
 | `VPN_PROFILE` | SoftEther profile name (without the `.vpn` extension) in `vpn-profiles/` — e.g. `DEFAULT-main`. |
 | `SE_HOST`, `SE_PORT`, `SE_HUB`, `SE_USER`, `SE_PASSWORD` | SoftEther connection as env vars — alternative to a `.vpn` profile file. Most users leave these empty. |
 | `IPSEC_USERS`, `IPSEC_PSK`, `VPN_SERVER_ADDR` | **Required for the inbound IPsec node only** (profile `ipsec-inbound`). EAP credentials, the IKEv1 shared secret, and the address clients dial. |
@@ -112,13 +112,13 @@ browser/probes ──TCP 443 (TLS)──► vpndogs-tls-inbound   (sing-box-serv
 | `TLS_USERS` | **Required for the inbound TLS node only** (profile `tls-inbound`): `user:pass` entries, comma-separated. |
 | `TLS_EMAIL` | Optional email for Let's Encrypt expiration alerts on the TLS inbound node. |
 
-> Run an extra client (`COMPOSE_PROFILES=sb-client-2` etc.) *without* a
+> Run an extra client (`COMPOSE_PROFILES=xray-client-2` etc.) *without* a
 > matching `SUB_URL_n` and that container will fail its subscription fetch and
 > restart in a loop. The rest of the stack is unaffected.
 
 ### The clients are Xray-core
 
-`vpndogs-sb-client-1..4` run the GFW-knocker **Xray-core** fork, not
+`vpndogs-xray-client-1..4` run the GFW-knocker **Xray-core** fork, not
 sing-box, so the tunnel can use the panel's TLS-hello **fragmentation**
 profiles. Two consequences for the `.env`:
 
@@ -148,7 +148,7 @@ directory is invisible to git — create it if absent.
 **The fallback must be configured or it restart-loops.** With neither a
 profile nor `SE_*` vars, the image's entrypoint exits (`SE_HUB is required for
 environment-based VPN setup`) and docker restarts it forever. Routing through
-the sb-cluster is unaffected — but there is no failover until you configure it,
+the xray-cluster is unaffected — but there is no failover until you configure it,
 and `docker exec vpndogs-watchdog check.sh --failover` will say so explicitly:
 
 ```sh
@@ -183,7 +183,7 @@ Connecting a client:
   mode.
 
 Decrypted traffic enters the same chain as everything else, so inbound clients
-get domestic-direct / sb-cluster / blackhole exactly like the local SOCKS
+get domestic-direct / xray-cluster / blackhole exactly like the local SOCKS
 clients.
 
 **Firewall or ports already taken?** IKE needs UDP 500 and 4500 on the host. If
@@ -228,7 +228,7 @@ see Troubleshooting), `PersistentKeepalive = 25`, server `PublicKey` and
 `docker exec vpndogs-wg-inbound report.sh`).
 
 Decrypted traffic enters the same chain as IPsec clients: domestic-direct /
-sb-cluster / blackhole via the router.
+xray-cluster / blackhole via the router.
 
 **Enabled without credentials?** The container logs `FATAL: WG_PEERS is
 required` and restart-loops; the rest of the stack is unaffected.
@@ -262,7 +262,7 @@ never complete). The full template lives in
 constants are printed by `docker exec vpndogs-awg-inbound report.sh`.
 
 Decrypted traffic enters the same chain as IPsec/WG clients:
-domestic-direct / sb-cluster / blackhole via the router.
+domestic-direct / xray-cluster / blackhole via the router.
 
 **Enabled without credentials?** The container logs `FATAL: AWG_PEERS is
 required` and restart-loops; the rest of the stack is unaffected.
@@ -349,11 +349,11 @@ overrides, compose overrides) is a future feature.
 
 ```sh
 docker exec vpndogs-watchdog check.sh              # remote egress, domestic egress, blackhole
-docker exec vpndogs-watchdog check.sh --failover   # plus: stop sb-clients -> softether takes over -> they come back
+docker exec vpndogs-watchdog check.sh --failover   # plus: stop xray-clients -> softether takes over -> they come back
 ```
 
 Each check must print `PASS: …` and the script exits 0. `--failover` damage:
-the sb-clients are stopped and started again — no ledger left behind.
+the xray-clients are stopped and started again — no ledger left behind.
 
 A fuller snapshot for issue reports or trying over time:
 
@@ -385,7 +385,7 @@ Runs ~1–2 min (it downloads 1 MB up/down per outbound) inside
   answer = leak.
 - `docker compose logs <service>` — the usual first look.
 - Every dogs image ships a `report.sh`; paste its output into an issue:
-  `docker exec vpndogs-sb-client-1 report.sh`
+  `docker exec vpndogs-xray-client-1 report.sh`
 - `docker compose ps` — health states. `start_period` is generous (up to 120s
   on the clients: subscription fetch + render + run + the observatory's first
   round), so patience first before diagnosing. The clients' healthcheck is a

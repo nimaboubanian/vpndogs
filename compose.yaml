@@ -53,15 +53,15 @@ services:
     networks: [vpndogs]
     restart: unless-stopped
 
-  vpndogs-sb-clients-lb:
+  vpndogs-xray-clients-lb:
     image: nimaboubanian/xray-lb
-    container_name: vpndogs-sb-clients-lb
+    container_name: vpndogs-xray-clients-lb
     depends_on:
       vpndogs-watchdog:
         condition: service_healthy
       # only client-1: the other three sit behind optional compose profiles,
       # and a depends_on on a profile-inactive service breaks docker compose
-      vpndogs-sb-client-1:
+      vpndogs-xray-client-1:
         condition: service_healthy
     healthcheck:
       test: ["CMD-SHELL", "nc -z 127.0.0.1 1081"]
@@ -72,9 +72,9 @@ services:
     networks: [vpndogs]
     restart: unless-stopped
 
-  vpndogs-sb-client-1:
+  vpndogs-xray-client-1:
     image: nimaboubanian/xray-client
-    container_name: vpndogs-sb-client-1
+    container_name: vpndogs-xray-client-1
     environment:
       SUB_URL: ${SUB_URL_1:?SUB_URL_1 is required}
       FINAL_TAG: ${FINAL_TAG:-💦 🔗 Smart Fragment 🧠}
@@ -98,13 +98,13 @@ services:
         condition: service_healthy
     networks:
       vpndogs:
-        aliases: [sb1]
+        aliases: [xray1]
     restart: unless-stopped
 
-  vpndogs-sb-client-2:
+  vpndogs-xray-client-2:
     image: nimaboubanian/xray-client
-    container_name: vpndogs-sb-client-2
-    profiles: ["sb-client-2"]
+    container_name: vpndogs-xray-client-2
+    profiles: ["xray-client-2"]
     environment:
       SUB_URL: ${SUB_URL_2:-}
       FINAL_TAG: ${FINAL_TAG:-💦 🔗 Smart Fragment 🧠}
@@ -128,13 +128,13 @@ services:
         condition: service_healthy
     networks:
       vpndogs:
-        aliases: [sb2]
+        aliases: [xray2]
     restart: unless-stopped
 
-  vpndogs-sb-client-3:
+  vpndogs-xray-client-3:
     image: nimaboubanian/xray-client
-    container_name: vpndogs-sb-client-3
-    profiles: ["sb-client-3"]
+    container_name: vpndogs-xray-client-3
+    profiles: ["xray-client-3"]
     environment:
       SUB_URL: ${SUB_URL_3:-}
       FINAL_TAG: ${FINAL_TAG:-💦 🔗 Smart Fragment 🧠}
@@ -158,13 +158,13 @@ services:
         condition: service_healthy
     networks:
       vpndogs:
-        aliases: [sb3]
+        aliases: [xray3]
     restart: unless-stopped
 
-  vpndogs-sb-client-4:
+  vpndogs-xray-client-4:
     image: nimaboubanian/xray-client
-    container_name: vpndogs-sb-client-4
-    profiles: ["sb-client-4"]
+    container_name: vpndogs-xray-client-4
+    profiles: ["xray-client-4"]
     environment:
       SUB_URL: ${SUB_URL_4:-}
       FINAL_TAG: ${FINAL_TAG:-💦 🔗 Smart Fragment 🧠}
@@ -188,7 +188,7 @@ services:
         condition: service_healthy
     networks:
       vpndogs:
-        aliases: [sb4]
+        aliases: [xray4]
     restart: unless-stopped
 
   vpndogs-softether:
