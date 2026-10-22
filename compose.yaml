@@ -82,8 +82,11 @@ services:
       PROBE_URL: "${PROBE_URL:-https://8.8.8.8/dns-query}"
     healthcheck:
       # a TCP connect passes long before the tunnel works: the xray balancer
-      # needs the observatory's first round before it has an alive outbound
-      test: ["CMD-SHELL", "curl -fsS --socks5-hostname 127.0.0.1:1081 --max-time 20 https://api.ipify.org >/dev/null"]
+      # needs the observatory's first round before it has an alive outbound.
+      # The target is the tunnel's own DoH endpoint, not a public IP-echo
+      # service: that endpoint is already a hard dependency (PROBE_URL), so
+      # this adds none, and any HTTP response proves the tunnel carried it.
+      test: ["CMD-SHELL", "curl -s --socks5-hostname 127.0.0.1:1081 --max-time 20 https://8.8.8.8/dns-query -o /dev/null"]
       interval: 30s
       timeout: 25s
       retries: 3
@@ -107,8 +110,11 @@ services:
       PROBE_URL: "${PROBE_URL:-https://8.8.8.8/dns-query}"
     healthcheck:
       # a TCP connect passes long before the tunnel works: the xray balancer
-      # needs the observatory's first round before it has an alive outbound
-      test: ["CMD-SHELL", "curl -fsS --socks5-hostname 127.0.0.1:1081 --max-time 20 https://api.ipify.org >/dev/null"]
+      # needs the observatory's first round before it has an alive outbound.
+      # The target is the tunnel's own DoH endpoint, not a public IP-echo
+      # service: that endpoint is already a hard dependency (PROBE_URL), so
+      # this adds none, and any HTTP response proves the tunnel carried it.
+      test: ["CMD-SHELL", "curl -s --socks5-hostname 127.0.0.1:1081 --max-time 20 https://8.8.8.8/dns-query -o /dev/null"]
       interval: 30s
       timeout: 25s
       retries: 3
@@ -132,8 +138,11 @@ services:
       PROBE_URL: "${PROBE_URL:-https://8.8.8.8/dns-query}"
     healthcheck:
       # a TCP connect passes long before the tunnel works: the xray balancer
-      # needs the observatory's first round before it has an alive outbound
-      test: ["CMD-SHELL", "curl -fsS --socks5-hostname 127.0.0.1:1081 --max-time 20 https://api.ipify.org >/dev/null"]
+      # needs the observatory's first round before it has an alive outbound.
+      # The target is the tunnel's own DoH endpoint, not a public IP-echo
+      # service: that endpoint is already a hard dependency (PROBE_URL), so
+      # this adds none, and any HTTP response proves the tunnel carried it.
+      test: ["CMD-SHELL", "curl -s --socks5-hostname 127.0.0.1:1081 --max-time 20 https://8.8.8.8/dns-query -o /dev/null"]
       interval: 30s
       timeout: 25s
       retries: 3
@@ -157,8 +166,11 @@ services:
       PROBE_URL: "${PROBE_URL:-https://8.8.8.8/dns-query}"
     healthcheck:
       # a TCP connect passes long before the tunnel works: the xray balancer
-      # needs the observatory's first round before it has an alive outbound
-      test: ["CMD-SHELL", "curl -fsS --socks5-hostname 127.0.0.1:1081 --max-time 20 https://api.ipify.org >/dev/null"]
+      # needs the observatory's first round before it has an alive outbound.
+      # The target is the tunnel's own DoH endpoint, not a public IP-echo
+      # service: that endpoint is already a hard dependency (PROBE_URL), so
+      # this adds none, and any HTTP response proves the tunnel carried it.
+      test: ["CMD-SHELL", "curl -s --socks5-hostname 127.0.0.1:1081 --max-time 20 https://8.8.8.8/dns-query -o /dev/null"]
       interval: 30s
       timeout: 25s
       retries: 3
